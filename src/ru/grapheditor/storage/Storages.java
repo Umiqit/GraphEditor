@@ -5,7 +5,8 @@ import java.util.List;
 public final class Storages {
 
     public static final List<DrawingStorage> ALL = List.of(
-            new JavaSerializationStorage(), new TextStorage());
+            new JavaSerializationStorage(), new TextStorage(),
+            new PngStorage(), new JpegStorage());
 
     private Storages() {
     }
