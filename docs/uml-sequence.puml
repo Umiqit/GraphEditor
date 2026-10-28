@@ -1,0 +1,32 @@
+@startuml
+title Отображение декорированной фигуры — диаграмма последовательностей
+
+actor Пользователь
+participant Canvas
+participant "ShadowDecorator" as Shadow
+participant "BorderDecorator" as Border
+participant "FillDecorator" as Fill
+participant Polygon
+
+Пользователь -> Canvas : paintComponent()
+activate Canvas
+Canvas -> Shadow : draw(g)
+activate Shadow
+Shadow -> Border : inner.draw(g)
+activate Border
+Border -> Fill : inner.draw(g)
+activate Fill
+Fill -> Polygon : inner.draw(g)
+activate Polygon
+Polygon --> Fill
+deactivate Polygon
+Fill --> Border
+deactivate Fill
+Border --> Shadow
+deactivate Border
+Shadow --> Canvas
+deactivate Shadow
+Canvas --> Пользователь : изображение на холсте
+deactivate Canvas
+
+@enduml

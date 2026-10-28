@@ -3,7 +3,10 @@ package ru.grapheditor.ui;
 public enum Tool {
     POINT("Точка"),
     CIRCLE("Круг"),
-    SQUARE("Квадрат");
+    SQUARE("Квадрат"),
+    POLYGON("Полигон"),
+    SELECT("Выбор"),
+    ERASER("Ластик");
 
     private final String label;
 

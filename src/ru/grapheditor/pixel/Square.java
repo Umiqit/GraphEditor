@@ -26,7 +26,10 @@ public class Square extends Pixel {
     @Override
     public void draw(Graphics2D g) {
         g.setColor(color);
-        g.fillRect(x - side / 2, y - side / 2, side, side);
+        java.awt.Stroke old = g.getStroke();
+        g.setStroke(new java.awt.BasicStroke(2f));
+        g.drawRect(x - side / 2, y - side / 2, side, side);
+        g.setStroke(old);
     }
 
     @Override

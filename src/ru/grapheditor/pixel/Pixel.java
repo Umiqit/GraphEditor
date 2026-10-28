@@ -36,4 +36,10 @@ public abstract class Pixel implements ru.grapheditor.shape.Shape {
     public void setColor(Color color) {
         this.color = color;
     }
+
+    @Override
+    public void move(int dx, int dy) {
+        x += dx;
+        y += dy;
+    }
 }
