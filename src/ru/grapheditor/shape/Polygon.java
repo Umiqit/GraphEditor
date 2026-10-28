@@ -25,6 +25,21 @@ public class Polygon implements Shape {
         vertices.add(new int[]{x, y});
     }
 
+    public void setVertex(int index, int x, int y) {
+        vertices.get(index)[0] = x;
+        vertices.get(index)[1] = y;
+    }
+
+    public void setVertices(int[] points) {
+        if (points == null || points.length != vertices.size() * 2 || points.length % 2 != 0) {
+            throw new IllegalArgumentException("Неверное число координат вершин");
+        }
+        for (int i = 0; i < points.length; i += 2) {
+            vertices.get(i / 2)[0] = points[i];
+            vertices.get(i / 2)[1] = points[i + 1];
+        }
+    }
+
     public int getVertexCount() {
         return vertices.size();
     }
@@ -66,9 +81,6 @@ public class Polygon implements Shape {
         g.setColor(baseColor);
         g.setStroke(new BasicStroke(1.5f));
         g.drawPolygon(asAwtPolygon());
-        for (int[] v : vertices) {
-            g.fillOval(v[0] - 3, v[1] - 3, 6, 6);
-        }
     }
 
     @Override

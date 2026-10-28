@@ -15,6 +15,14 @@ public abstract class ShapeDecorator implements Shape {
         return inner;
     }
 
+    protected Shape unwrap() {
+        Shape s = inner;
+        while (s instanceof ShapeDecorator d) {
+            s = d.getInner();
+        }
+        return s;
+    }
+
     @Override
     public boolean contains(int x, int y) {
         return inner.contains(x, y);

@@ -4,6 +4,7 @@ import ru.grapheditor.command.ClearDrawingCommand;
 import ru.grapheditor.command.CreateShapeCommand;
 import ru.grapheditor.command.DeleteShapeCommand;
 import ru.grapheditor.command.History;
+import ru.grapheditor.command.LambdaCommand;
 import ru.grapheditor.command.MoveShapeCommand;
 import ru.grapheditor.command.RedecorateCommand;
 import ru.grapheditor.Settings;
@@ -48,8 +49,14 @@ public class Canvas extends JPanel {
     private final List<int[]> draft = new ArrayList<>();
     private int[] dragStart;
     private int[] dragNow;
+    private DragMode dragMode = DragMode.NONE;
+    private int dragVertex = -1;
+    private int[] oldVertices;
+    private int resizeStart;
     private Shape selected;
     private Runnable changeListener;
+
+    private enum DragMode { NONE, MOVE, VERTEX, RESIZE }
 
     public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options,
                   Settings settings, History history) {
@@ -149,6 +156,8 @@ public class Canvas extends JPanel {
     }
 
     private Shape decorate(Polygon polygon) {
+        polygon.setBaseColor(options.isBorderEnabled()
+                ? options.getBorderColor() : tools.getColor());
         Shape shape = polygon;
         if (options.isShadowEnabled()) {
             shape = new ShadowDecorator(shape, options.getShadowOffsetX(),
@@ -184,6 +193,45 @@ public class Canvas extends JPanel {
         repaint();
     }
 
+    private Integer decorationChoice;
+
+    public void setDecorationChoice(Integer choice) {
+        this.decorationChoice = choice;
+    }
+
+    private int askDecoration() {
+        if (decorationChoice != null) {
+            return decorationChoice;
+        }
+        if (java.awt.GraphicsEnvironment.isHeadless()) {
+            return 0;
+        }
+        Object[] opts = {"Заливка", "Только контур", "Отмена"};
+        return javax.swing.JOptionPane.showOptionDialog(this,
+                "Оформить фигуру заливкой или оставить контуром?",
+                "Полигон завершён", javax.swing.JOptionPane.DEFAULT_OPTION,
+                javax.swing.JOptionPane.QUESTION_MESSAGE, null, opts, opts[0]);
+    }
+
+    private Shape decorateFinished(Polygon polygon, int choice) {
+        polygon.setBaseColor(tools.getColor());
+        Shape shape = polygon;
+        if (options.isShadowEnabled()) {
+            shape = new ShadowDecorator(shape, options.getShadowOffsetX(),
+                    options.getShadowOffsetY(), options.getShadowColor());
+        }
+        shape = new BorderDecorator(shape, tools.getColor(), options.getBorderWidth());
+        if (choice == 0) {
+            shape = new FillDecorator(shape, tools.getColor());
+        }
+        return shape;
+    }
+
+    private boolean isCloseClick(int x, int y) {
+        int[] first = draft.get(0);
+        return Math.abs(first[0] - x) <= 7 && Math.abs(first[1] - y) <= 7;
+    }
+
     private void finishDraftPolygon() {
         if (draft.size() >= 3) {
             int[] pts = new int[draft.size() * 2];
@@ -191,9 +239,14 @@ public class Canvas extends JPanel {
                 pts[i * 2] = draft.get(i)[0];
                 pts[i * 2 + 1] = draft.get(i)[1];
             }
-            addShape(decorate(new Polygon(pts)));
+            int choice = askDecoration();
+            if (choice == 0 || choice == 1) {
+                addShape(decorateFinished(new Polygon(pts), choice));
+                draft.clear();
+            }
+        } else {
+            draft.clear();
         }
-        draft.clear();
         repaint();
     }
 
@@ -299,6 +352,131 @@ public class Canvas extends JPanel {
         return null;
     }
 
+    private Shape unwrap(Shape s) {
+        while (s instanceof ShapeDecorator d) {
+            s = d.getInner();
+        }
+        return s;
+    }
+
+    private DragMode detectHandle(int x, int y) {
+        Shape base = unwrap(selected);
+        if (base instanceof Polygon p) {
+            List<int[]> vs = p.getVertices();
+            for (int i = 0; i < vs.size(); i++) {
+                if (Math.abs(vs.get(i)[0] - x) <= 7 && Math.abs(vs.get(i)[1] - y) <= 7) {
+                    dragVertex = i;
+                    oldVertices = copyVertices(p);
+                    return DragMode.VERTEX;
+                }
+            }
+        }
+        if (selected instanceof Pixel pix && isResizable(pix)) {
+            int half = hitRadius(pix);
+            boolean nearCorner = (Math.abs(Math.abs(x - pix.getX()) - half) <= 8)
+                    && (Math.abs(Math.abs(y - pix.getY()) - half) <= 8);
+            if (nearCorner) {
+                resizeStart = pix instanceof ru.grapheditor.pixel.Circle c ? c.getRadius()
+                        : ((ru.grapheditor.pixel.Square) pix).getSide();
+                return DragMode.RESIZE;
+            }
+        }
+        return DragMode.MOVE;
+    }
+
+    private boolean isResizable(Pixel pix) {
+        return pix instanceof ru.grapheditor.pixel.Circle
+                || pix instanceof ru.grapheditor.pixel.Square;
+    }
+
+    private int[] copyVertices(Polygon p) {
+        int[] pts = new int[p.getVertexCount() * 2];
+        List<int[]> vs = p.getVertices();
+        for (int i = 0; i < vs.size(); i++) {
+            pts[i * 2] = vs.get(i)[0];
+            pts[i * 2 + 1] = vs.get(i)[1];
+        }
+        return pts;
+    }
+
+    private void dragSelected(int x, int y) {
+        if (dragStart == null || selected == null) {
+            return;
+        }
+        switch (dragMode) {
+            case MOVE -> {
+                selected.move(x - dragNow[0], y - dragNow[1]);
+                dragNow = new int[]{x, y};
+            }
+            case VERTEX -> {
+                if (unwrap(selected) instanceof Polygon p && dragVertex >= 0) {
+                    p.setVertex(dragVertex, x, y);
+                }
+                dragNow = new int[]{x, y};
+            }
+            case RESIZE -> resizeSelected(x, y);
+            default -> {
+            }
+        }
+        repaint();
+    }
+
+    private void resizeSelected(int x, int y) {
+        if (!(selected instanceof Pixel pix) || !isResizable(pix)) {
+            return;
+        }
+        int half = Math.max(2, Math.max(Math.abs(x - pix.getX()), Math.abs(y - pix.getY())));
+        if (pix instanceof ru.grapheditor.pixel.Circle c) {
+            c.setRadius(half);
+        } else if (pix instanceof ru.grapheditor.pixel.Square s) {
+            s.setSide(half * 2);
+        }
+        dragNow = new int[]{x, y};
+    }
+
+    private void releaseSelected(int x, int y) {
+        if (dragStart != null && selected != null) {
+            if (dragMode == DragMode.VERTEX && unwrap(selected) instanceof Polygon p
+                    && oldVertices != null) {
+                int[] after = copyVertices(p);
+                int[] before = oldVertices;
+                if (!java.util.Arrays.equals(before, after)) {
+                    history.pushExecuted(new LambdaCommand(
+                            () -> p.setVertices(after), () -> p.setVertices(before)));
+                    notifyChanged();
+                }
+            } else if (dragMode == DragMode.RESIZE && selected instanceof Pixel pix
+                    && isResizable(pix)) {
+                int before = resizeStart;
+                int after = pix instanceof ru.grapheditor.pixel.Circle c ? c.getRadius()
+                        : ((ru.grapheditor.pixel.Square) pix).getSide();
+                if (before != after) {
+                    history.pushExecuted(new LambdaCommand(() -> setSize(pix, after),
+                            () -> setSize(pix, before)));
+                    notifyChanged();
+                }
+            } else if (dragMode == DragMode.MOVE
+                    && (x != dragStart[0] || y != dragStart[1])) {
+                history.pushExecuted(new MoveShapeCommand(selected,
+                        x - dragStart[0], y - dragStart[1]));
+                notifyChanged();
+            }
+        }
+        dragStart = null;
+        dragNow = null;
+        dragMode = DragMode.NONE;
+        dragVertex = -1;
+        oldVertices = null;
+    }
+
+    private void setSize(Pixel pix, int value) {
+        if (pix instanceof ru.grapheditor.pixel.Circle c) {
+            c.setRadius(value);
+        } else if (pix instanceof ru.grapheditor.pixel.Square s) {
+            s.setSide(value);
+        }
+    }
+
     private class MouseHandler extends MouseAdapter {
 
         @Override
@@ -313,7 +491,8 @@ public class Canvas extends JPanel {
                     repaint();
                 }
                 case POLYGON -> {
-                    if (e.getClickCount() >= 2 && draft.size() >= 3) {
+                    if (draft.size() >= 3
+                            && (isCloseClick(x, y) || e.getClickCount() >= 2)) {
                         finishDraftPolygon();
                     } else {
                         draft.add(new int[]{x, y});
@@ -323,12 +502,20 @@ public class Canvas extends JPanel {
                 case SELECT -> {
                     Shape hit = findTolerant(x, y);
                     if (hit == null) {
-                        selected = null;
-                    } else if (hit == selected) {
-                        dragStart = new int[]{x, y};
-                        dragNow = new int[]{x, y};
+                        DragMode handle = selected != null ? detectHandle(x, y) : DragMode.NONE;
+                        if (handle == DragMode.VERTEX || handle == DragMode.RESIZE) {
+                            dragStart = new int[]{x, y};
+                            dragNow = new int[]{x, y};
+                            dragMode = handle;
+                        } else {
+                            selected = null;
+                            dragMode = DragMode.NONE;
+                        }
                     } else {
                         selected = hit;
+                        dragStart = new int[]{x, y};
+                        dragNow = new int[]{x, y};
+                        dragMode = detectHandle(x, y);
                     }
                     repaint();
                 }
@@ -347,13 +534,7 @@ public class Canvas extends JPanel {
                         repaint();
                     }
                 }
-                case SELECT -> {
-                    if (dragStart != null && selected != null) {
-                        selected.move(e.getX() - dragNow[0], e.getY() - dragNow[1]);
-                        dragNow = new int[]{e.getX(), e.getY()};
-                        repaint();
-                    }
-                }
+                case SELECT -> dragSelected(e.getX(), e.getY());
                 default -> {
                 }
             }
@@ -362,14 +543,7 @@ public class Canvas extends JPanel {
         @Override
         public void mouseReleased(MouseEvent e) {
             if (tools.getCurrent() == Tool.SELECT) {
-                if (dragStart != null && selected != null
-                        && (dragNow[0] != dragStart[0] || dragNow[1] != dragStart[1])) {
-                    history.pushExecuted(new MoveShapeCommand(selected,
-                            dragNow[0] - dragStart[0], dragNow[1] - dragStart[1]));
-                    notifyChanged();
-                }
-                dragStart = null;
-                dragNow = null;
+                releaseSelected(e.getX(), e.getY());
                 return;
             }
             if (dragStart == null

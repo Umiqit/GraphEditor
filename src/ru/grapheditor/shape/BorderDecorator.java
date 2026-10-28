@@ -31,7 +31,7 @@ public class BorderDecorator extends ShapeDecorator {
 
     @Override
     public void draw(Graphics2D g) {
-        if (inner instanceof Polygon p) {
+        if (unwrap() instanceof Polygon p) {
             java.awt.Stroke old = g.getStroke();
             g.setStroke(new BasicStroke(width));
             g.setColor(borderColor);

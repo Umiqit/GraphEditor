@@ -33,7 +33,7 @@ public class ShadowDecorator extends ShapeDecorator {
 
     @Override
     public void draw(Graphics2D g) {
-        if (inner instanceof Polygon p) {
+        if (unwrap() instanceof Polygon p) {
             int n = p.getVertexCount();
             int[] xs = p.xArray();
             int[] ys = p.yArray();

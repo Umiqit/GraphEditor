@@ -1,12 +1,19 @@
 @startuml
-title GraphEditor — диаграмма классов (инкременты 1–2)
+title GraphEditor v1.0 — диаграмма классов
+
+package ru.grapheditor {
+    class Settings {
+        -backgroundColor: Color
+        -defaultBorderWidth: float
+        -defaultShadowOffsetX/Y: int
+    }
+}
 
 package ru.grapheditor.pixel {
     abstract class Pixel {
         #x: int
         #y: int
         #color: Color
-        +move(dx, dy)
     }
     class Point
     class Circle {
@@ -43,10 +50,12 @@ package ru.grapheditor.shape {
         +remove(shape)
         +clear()
         +findAt(x, y)
-        +drawAll(g)
+        +snapshot()/restore(list)
     }
     class Polygon {
         -vertices: List<int[]>
+        +setVertex(i, x, y)
+        +setVertices(points)
     }
     abstract class ShapeDecorator {
         #inner: Shape
@@ -65,18 +74,87 @@ package ru.grapheditor.shape {
     Drawing o-- Shape
 }
 
+package ru.grapheditor.command {
+    interface Command {
+        +execute()
+        +undo()
+    }
+    class History {
+        -undoStack: Deque<Command>
+        -redoStack: Deque<Command>
+        +execute(cmd)
+        +pushExecuted(cmd)
+        +undo()/redo()
+    }
+    class CreateShapeCommand
+    class DeleteShapeCommand
+    class MoveShapeCommand
+    class RedecorateCommand
+    class ClearDrawingCommand
+    class LambdaCommand
+
+    Command <|.. CreateShapeCommand
+    Command <|.. DeleteShapeCommand
+    Command <|.. MoveShapeCommand
+    Command <|.. RedecorateCommand
+    Command <|.. ClearDrawingCommand
+    Command <|.. LambdaCommand
+    History o-- Command
+}
+
+package ru.grapheditor.storage {
+    interface DrawingStorage {
+        +formatName()
+        +extension()
+        +save(drawing, file)
+        +load(file): Drawing
+    }
+    class JavaSerializationStorage
+    class TextStorage
+    abstract class RasterImageStorage {
+        +save(drawing, file)
+        +load(file): Drawing
+        #{abstract} embed(image, payload)
+        #{abstract} extract(image)
+    }
+    class PngStorage
+    class JpegStorage
+    class Storages {
+        +{static} ALL: List<DrawingStorage>
+        +{static} byExtension(ext)
+    }
+
+    DrawingStorage <|.. JavaSerializationStorage
+    DrawingStorage <|.. TextStorage
+    DrawingStorage <|.. RasterImageStorage
+    RasterImageStorage <|-- PngStorage
+    RasterImageStorage <|-- JpegStorage
+    Storages o-- DrawingStorage
+    DrawingStorage ..> Drawing
+}
+
 package ru.grapheditor.ui {
     class GraphEditor
     class Canvas {
         -drawing: Drawing
+        -history: History
         -selected: Shape
+        -dragMode: DragMode
+        +undo()/redo()
+        +deleteSelected()
+        +newDrawing()
+        +setDrawingContent(d)
         +clearDrawing()
         +redecorateSelected()
+        +applySettings()
+        +detectHandle(x, y): DragMode
+        +dragSelected(x, y)
+        +releaseSelected(x, y)
     }
-    class ToolSelector {
-        -current: Tool
-        -color: Color
+    enum DragMode {
+        NONE, MOVE, VERTEX, RESIZE
     }
+    class ToolSelector
     enum Tool {
         POINT, CIRCLE, SQUARE,
         POLYGON, SELECT, ERASER
@@ -88,12 +166,17 @@ package ru.grapheditor.ui {
     GraphEditor *-- Canvas
     GraphEditor *-- ToolSelector
     GraphEditor *-- DecorationOptions
+    GraphEditor --> Settings
     Canvas --> ToolSelector
+    Canvas --> History
     Canvas --> Drawing
-    ToolSelector --> Tool
+    Canvas ..> DragMode
+    GraphEditor --> History
+    Canvas ..> PixelFactory
+    Canvas ..> Polygon
     ColorPalette ..> CustomColorDialog
+    ToolSelector --> Tool
 }
 
-Canvas ..> PixelFactory
-Canvas ..> Polygon
+History ..> Drawing
 @enduml

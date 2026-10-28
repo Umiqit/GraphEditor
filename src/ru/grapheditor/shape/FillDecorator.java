@@ -21,7 +21,7 @@ public class FillDecorator extends ShapeDecorator {
 
     @Override
     public void draw(Graphics2D g) {
-        if (inner instanceof Polygon p) {
+        if (unwrap() instanceof Polygon p) {
             g.setColor(fillColor);
             g.fillPolygon(p.xArray(), p.yArray(), p.getVertexCount());
         }
