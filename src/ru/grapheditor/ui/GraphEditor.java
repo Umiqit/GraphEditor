@@ -2,13 +2,11 @@ package ru.grapheditor.ui;
 
 import ru.grapheditor.shape.Drawing;
 
-import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JColorChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -18,7 +16,6 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.border.TitledBorder;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 
@@ -51,24 +48,25 @@ public class GraphEditor extends JFrame {
 
     private JPanel createToolBar() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        panel.setBorder(BorderFactory.createTitledBorder("Инструменты"));
+        panel.setBorder(new TitledBorder("Инструменты"));
 
         ButtonGroup group = new ButtonGroup();
-        addToolButton(panel, group, Tool.POINT, "Точка: щёлкайте или ведите мышь с зажатой кнопкой");
+        addToolButton(panel, group, Tool.POINT, "Точка: щёлкайте или ведите мышь, удерживая кнопку");
         addToolButton(panel, group, Tool.CIRCLE, "Круг: рисование кругами выбранного цвета");
         addToolButton(panel, group, Tool.SQUARE, "Квадрат: рисование квадратами выбранного цвета");
         addToolButton(panel, group, Tool.POLYGON,
                 "Полигон: щелчки задают вершины (минимум 3), двойной щелчок завершает");
-        addToolButton(panel, group, Tool.SELECT, "Выбор: щёлкните по фигуре, чтобы изменить оформление");
+        addToolButton(panel, group, Tool.SELECT, "Выбор: щёлкните по фигуре, чтобы изменить её оформление");
         addToolButton(panel, group, Tool.ERASER, "Ластик: щёлкните по фигуре, чтобы удалить её");
 
-        JButton colorButton = new JButton("Цвет");
-        colorButton.setToolTipText("Выбор цвета рисования");
-        colorButton.addActionListener(e -> chooseColor(colorButton, tools::setColor));
-        panel.add(colorButton);
+        panel.add(new JLabel("Цвет:"));
+        ColorPalette penPalette = new ColorPalette(tools.getColor());
+        penPalette.setToolTipText("Палитра: цвет рисования");
+        penPalette.addColorListener(tools::setColor);
+        panel.add(penPalette);
 
         JButton clearButton = new JButton("Очистить");
-        clearButton.setToolTipText("Удалить все элементы");
+        clearButton.setToolTipText("Удалить все элементы с рабочей области");
         clearButton.addActionListener(e -> canvas.clearDrawing());
         panel.add(clearButton);
 
@@ -92,12 +90,12 @@ public class GraphEditor extends JFrame {
 
         JCheckBox fill = new JCheckBox("Заливка", options.isFillEnabled());
         fill.setToolTipText("Закрасить внутреннюю область фигуры");
-        JButton fillColor = new JButton("Цвет заливки");
-        fillColor.setToolTipText("Выбрать цвет заливки");
-        fillColor.addActionListener(e -> chooseColor(fillColor, c -> {
+        ColorPalette fillPalette = new ColorPalette(options.getFillColor());
+        fillPalette.setToolTipText("Цвет заливки");
+        fillPalette.addColorListener(c -> {
             options.setFillColor(c);
             canvas.redecorateSelected();
-        }));
+        });
         fill.addActionListener(e -> {
             options.setFillEnabled(fill.isSelected());
             canvas.redecorateSelected();
@@ -105,12 +103,12 @@ public class GraphEditor extends JFrame {
 
         JCheckBox border = new JCheckBox("Контур", options.isBorderEnabled());
         border.setToolTipText("Нарисовать границу фигуры");
-        JButton borderColor = new JButton("Цвет контура");
-        borderColor.setToolTipText("Выбрать цвет контура");
-        borderColor.addActionListener(e -> chooseColor(borderColor, c -> {
+        ColorPalette borderPalette = new ColorPalette(options.getBorderColor());
+        borderPalette.setToolTipText("Цвет контура");
+        borderPalette.addColorListener(c -> {
             options.setBorderColor(c);
             canvas.redecorateSelected();
-        }));
+        });
         JSpinner borderWidth = new JSpinner(new SpinnerNumberModel(
                 (double) options.getBorderWidth(), 0.5, 20.0, 0.5));
         borderWidth.setPreferredSize(new Dimension(60, 24));
@@ -126,41 +124,28 @@ public class GraphEditor extends JFrame {
 
         JCheckBox shadow = new JCheckBox("Тень", options.isShadowEnabled());
         shadow.setToolTipText("Добавить фигуре тень");
-        JButton shadowColor = new JButton("Цвет тени");
-        shadowColor.setToolTipText("Выбрать цвет тени");
-        shadowColor.addActionListener(e -> chooseColor(shadowColor, c -> {
+        ColorPalette shadowPalette = new ColorPalette(options.getShadowColor());
+        shadowPalette.setToolTipText("Цвет тени");
+        shadowPalette.addColorListener(c -> {
             options.setShadowColor(c);
             canvas.redecorateSelected();
-        }));
+        });
         shadow.addActionListener(e -> {
             options.setShadowEnabled(shadow.isSelected());
             canvas.redecorateSelected();
         });
 
         panel.add(fill);
-        panel.add(fillColor);
+        panel.add(fillPalette);
         panel.add(Box.createHorizontalStrut(10));
         panel.add(border);
-        panel.add(borderColor);
+        panel.add(borderPalette);
         panel.add(new JLabel("толщина:"));
         panel.add(borderWidth);
         panel.add(Box.createHorizontalStrut(10));
         panel.add(shadow);
-        panel.add(shadowColor);
+        panel.add(shadowPalette);
         return panel;
-    }
-
-    private void chooseColor(JButton source, ColorConsumer consumer) {
-        Color c = JColorChooser.showDialog(this, "Выбор цвета", Color.WHITE);
-        if (c != null) {
-            source.setBackground(c);
-            consumer.accept(c);
-        }
-    }
-
-    @FunctionalInterface
-    private interface ColorConsumer {
-        void accept(Color color);
     }
 
     public static void main(String[] args) {
