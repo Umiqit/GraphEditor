@@ -1,11 +1,12 @@
 @startuml
-title GraphEditor — диаграмма классов (инкремент 1)
+title GraphEditor — диаграмма классов (инкременты 1–2)
 
 package ru.grapheditor.pixel {
     abstract class Pixel {
         #x: int
         #y: int
         #color: Color
+        +move(dx, dy)
     }
     class Point
     class Circle {
@@ -34,6 +35,7 @@ package ru.grapheditor.shape {
     interface Shape {
         +draw(g)
         +contains(x, y)
+        +move(dx, dy)
     }
     class Drawing {
         -shapes: List<Shape>
@@ -43,29 +45,55 @@ package ru.grapheditor.shape {
         +findAt(x, y)
         +drawAll(g)
     }
+    class Polygon {
+        -vertices: List<int[]>
+    }
+    abstract class ShapeDecorator {
+        #inner: Shape
+    }
+    class FillDecorator
+    class BorderDecorator
+    class ShadowDecorator
+
     Shape <|.. Pixel
+    Shape <|.. Polygon
+    Shape <|.. ShapeDecorator
+    ShapeDecorator o-- Shape
+    ShapeDecorator <|-- FillDecorator
+    ShapeDecorator <|-- BorderDecorator
+    ShapeDecorator <|-- ShadowDecorator
     Drawing o-- Shape
 }
 
 package ru.grapheditor.ui {
+    class GraphEditor
     class Canvas {
         -drawing: Drawing
+        -selected: Shape
         +clearDrawing()
+        +redecorateSelected()
     }
     class ToolSelector {
         -current: Tool
         -color: Color
     }
     enum Tool {
-        POINT
-        CIRCLE
-        SQUARE
+        POINT, CIRCLE, SQUARE,
+        POLYGON, SELECT, ERASER
     }
+    class DecorationOptions
+    class ColorPalette
+    class CustomColorDialog
 
+    GraphEditor *-- Canvas
+    GraphEditor *-- ToolSelector
+    GraphEditor *-- DecorationOptions
     Canvas --> ToolSelector
     Canvas --> Drawing
     ToolSelector --> Tool
+    ColorPalette ..> CustomColorDialog
 }
 
-Canvas ..> PixelFactory : создаёт элементы
+Canvas ..> PixelFactory
+Canvas ..> Polygon
 @enduml
