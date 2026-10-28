@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class Drawing implements Iterable<Shape> {
+public class Drawing implements Iterable<Shape>, java.io.Serializable {
 
     private final List<Shape> shapes = new ArrayList<>();
 
@@ -14,6 +14,29 @@ public class Drawing implements Iterable<Shape> {
             throw new IllegalArgumentException("Элемент не может быть null");
         }
         shapes.add(shape);
+    }
+
+    public void add(int index, Shape shape) {
+        shapes.add(index, shape);
+    }
+
+    public void addAll(Drawing other) {
+        for (Shape s : other) {
+            add(s);
+        }
+    }
+
+    public int indexOf(Shape shape) {
+        return shapes.indexOf(shape);
+    }
+
+    public List<Shape> snapshot() {
+        return new ArrayList<>(shapes);
+    }
+
+    public void restore(List<Shape> snapshot) {
+        shapes.clear();
+        shapes.addAll(snapshot);
     }
 
     public boolean remove(Shape shape) {

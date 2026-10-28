@@ -1,5 +1,6 @@
 package ru.grapheditor.ui;
 
+import ru.grapheditor.command.History;
 import ru.grapheditor.shape.Drawing;
 
 import javax.swing.Box;
@@ -9,6 +10,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JToggleButton;
@@ -23,19 +25,24 @@ public class GraphEditor extends JFrame {
 
     private final ToolSelector tools = new ToolSelector();
     private final DecorationOptions options = new DecorationOptions();
+    private final History history = new History();
     private final Canvas canvas;
     private final JLabel status = new JLabel("Инструмент: Точка");
+    private final JMenuItem undoItem = new JMenuItem("Отменить");
+    private final JMenuItem redoItem = new JMenuItem("Повторить");
 
     public GraphEditor() {
-        super("GraphEditor (инкремент 1–2)");
+        super("GraphEditor (инкременты 1–3)");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        canvas = new Canvas(new Drawing(), tools, options);
+        canvas = new Canvas(new Drawing(), tools, options, history);
         canvas.setChangeListener(this::updateState);
         add(canvas, BorderLayout.CENTER);
         add(createTopBar(), BorderLayout.NORTH);
         add(status, BorderLayout.SOUTH);
+        setJMenuBar(createMenuBar());
+        bindKeys();
 
         updateState();
         pack();
@@ -44,7 +51,54 @@ public class GraphEditor extends JFrame {
 
     private void updateState() {
         status.setText("Инструмент: " + tools.getCurrent().getLabel()
-                + "    |    Элементов: " + canvas.getDrawing().size());
+                + "    |    Элементов: " + canvas.getDrawing().size()
+                + "    |    Ctrl+Z отмена, Ctrl+Y повтор, Del удалить выбранное");
+        undoItem.setEnabled(history.canUndo());
+        redoItem.setEnabled(history.canRedo());
+    }
+
+    private javax.swing.JMenuBar createMenuBar() {
+        javax.swing.JMenuBar bar = new javax.swing.JMenuBar();
+        javax.swing.JMenu edit = new javax.swing.JMenu("Правка");
+        undoItem.addActionListener(e -> canvas.undo());
+        redoItem.addActionListener(e -> canvas.redo());
+        javax.swing.JMenuItem deleteItem = new javax.swing.JMenuItem("Удалить выбранное");
+        deleteItem.addActionListener(e -> canvas.deleteSelected());
+        edit.add(undoItem);
+        edit.add(redoItem);
+        edit.add(deleteItem);
+        bar.add(edit);
+        return bar;
+    }
+
+    private void bindKeys() {
+        javax.swing.InputMap im = canvas.getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW);
+        javax.swing.ActionMap am = canvas.getActionMap();
+        im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Z,
+                java.awt.event.InputEvent.CTRL_DOWN_MASK), "undo");
+        im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Y,
+                java.awt.event.InputEvent.CTRL_DOWN_MASK), "redo");
+        im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_Z,
+                java.awt.event.InputEvent.CTRL_DOWN_MASK | java.awt.event.InputEvent.SHIFT_DOWN_MASK), "redo");
+        im.put(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_DELETE, 0), "delete");
+        am.put("undo", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.undo();
+            }
+        });
+        am.put("redo", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.redo();
+            }
+        });
+        am.put("delete", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                canvas.deleteSelected();
+            }
+        });
     }
 
     private JPanel createTopBar() {

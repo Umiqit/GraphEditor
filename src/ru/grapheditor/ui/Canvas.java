@@ -1,5 +1,11 @@
 package ru.grapheditor.ui;
 
+import ru.grapheditor.command.ClearDrawingCommand;
+import ru.grapheditor.command.CreateShapeCommand;
+import ru.grapheditor.command.DeleteShapeCommand;
+import ru.grapheditor.command.History;
+import ru.grapheditor.command.MoveShapeCommand;
+import ru.grapheditor.command.RedecorateCommand;
 import ru.grapheditor.pixel.Pixel;
 import ru.grapheditor.pixel.PixelFactory;
 import ru.grapheditor.pixel.PixelType;
@@ -35,6 +41,7 @@ public class Canvas extends JPanel {
     private final Drawing drawing;
     private final ToolSelector tools;
     private final DecorationOptions options;
+    private final History history;
 
     private final List<int[]> draft = new ArrayList<>();
     private int[] dragStart;
@@ -42,10 +49,11 @@ public class Canvas extends JPanel {
     private Shape selected;
     private Runnable changeListener;
 
-    public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options) {
+    public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options, History history) {
         this.drawing = drawing;
         this.tools = tools;
         this.options = options;
+        this.history = history;
         setPreferredSize(new Dimension(800, 600));
         setBackground(Color.WHITE);
         MouseHandler handler = new MouseHandler();
@@ -55,6 +63,10 @@ public class Canvas extends JPanel {
 
     public Drawing getDrawing() {
         return drawing;
+    }
+
+    public History getHistory() {
+        return history;
     }
 
     public Shape getSelected() {
@@ -71,13 +83,60 @@ public class Canvas extends JPanel {
         }
     }
 
-    public void clearDrawing() {
+    public void newDrawing() {
         drawing.clear();
+        history.clear();
         draft.clear();
-        dragStart = null;
         selected = null;
         notifyChanged();
         repaint();
+    }
+
+    public void setDrawingContent(Drawing loaded) {
+        drawing.clear();
+        drawing.addAll(loaded);
+        history.clear();
+        draft.clear();
+        selected = null;
+        notifyChanged();
+        repaint();
+    }
+
+    public void deleteSelected() {
+        if (selected != null) {
+            Shape target = selected;
+            selected = null;
+            history.execute(new DeleteShapeCommand(drawing, target));
+            notifyChanged();
+            repaint();
+        }
+    }
+
+    public void undo() {
+        history.undo();
+        if (selected != null && drawing.indexOf(selected) < 0) {
+            selected = null;
+        }
+        notifyChanged();
+        repaint();
+    }
+
+    public void redo() {
+        history.redo();
+        notifyChanged();
+        repaint();
+    }
+
+    public void clearDrawing() {
+        history.execute(new ClearDrawingCommand(drawing));
+        selected = null;
+        notifyChanged();
+        repaint();
+    }
+
+    private void addShape(Shape shape) {
+        history.execute(new CreateShapeCommand(drawing, shape));
+        notifyChanged();
     }
 
     private Shape decorate(Polygon polygon) {
@@ -107,8 +166,10 @@ public class Canvas extends JPanel {
             return;
         }
         Shape redecorated = decorate(polygon);
-        drawing.remove(selected);
+        Shape before = selected;
+        drawing.remove(before);
         drawing.add(redecorated);
+        history.pushExecuted(new RedecorateCommand(drawing, before, redecorated));
         selected = redecorated;
         notifyChanged();
         repaint();
@@ -121,8 +182,7 @@ public class Canvas extends JPanel {
                 pts[i * 2] = draft.get(i)[0];
                 pts[i * 2 + 1] = draft.get(i)[1];
             }
-            drawing.add(decorate(new Polygon(pts)));
-            notifyChanged();
+            addShape(decorate(new Polygon(pts)));
         }
         draft.clear();
         repaint();
@@ -293,6 +353,12 @@ public class Canvas extends JPanel {
         @Override
         public void mouseReleased(MouseEvent e) {
             if (tools.getCurrent() == Tool.SELECT) {
+                if (dragStart != null && selected != null
+                        && (dragNow[0] != dragStart[0] || dragNow[1] != dragStart[1])) {
+                    history.pushExecuted(new MoveShapeCommand(selected,
+                            dragNow[0] - dragStart[0], dragNow[1] - dragStart[1]));
+                    notifyChanged();
+                }
                 dragStart = null;
                 dragNow = null;
                 return;
@@ -307,13 +373,11 @@ public class Canvas extends JPanel {
                 stamp(tools.getCurrent() == Tool.CIRCLE ? PixelType.CIRCLE : PixelType.SQUARE,
                         e.getX(), e.getY());
             } else if (tools.getCurrent() == Tool.CIRCLE) {
-                drawing.add(new ru.grapheditor.pixel.Circle(
+                addShape(new ru.grapheditor.pixel.Circle(
                         box[0] + box[2] / 2, box[1] + box[3] / 2, box[2] / 2, tools.getColor()));
-                notifyChanged();
             } else {
-                drawing.add(new ru.grapheditor.pixel.Square(
+                addShape(new ru.grapheditor.pixel.Square(
                         box[0] + box[2] / 2, box[1] + box[3] / 2, box[2], tools.getColor()));
-                notifyChanged();
             }
             dragStart = null;
             dragNow = null;
@@ -321,8 +385,7 @@ public class Canvas extends JPanel {
         }
 
         private void stamp(PixelType type, int x, int y) {
-            drawing.add(PixelFactory.create(type, x, y, tools.getColor()));
-            notifyChanged();
+            addShape(PixelFactory.create(type, x, y, tools.getColor()));
             repaint();
         }
 
@@ -332,7 +395,7 @@ public class Canvas extends JPanel {
                 if (hit == selected) {
                     selected = null;
                 }
-                drawing.remove(hit);
+                history.execute(new DeleteShapeCommand(drawing, hit));
                 notifyChanged();
                 repaint();
             }
