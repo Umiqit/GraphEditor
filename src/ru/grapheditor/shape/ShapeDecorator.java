@@ -19,4 +19,9 @@ public abstract class ShapeDecorator implements Shape {
     public boolean contains(int x, int y) {
         return inner.contains(x, y);
     }
+
+    @Override
+    public void move(int dx, int dy) {
+        inner.move(dx, dy);
+    }
 }

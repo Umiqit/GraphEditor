@@ -24,6 +24,7 @@ public class GraphEditor extends JFrame {
     private final ToolSelector tools = new ToolSelector();
     private final DecorationOptions options = new DecorationOptions();
     private final Canvas canvas;
+    private final JLabel status = new JLabel("Инструмент: Точка");
 
     public GraphEditor() {
         super("GraphEditor (инкремент 1–2)");
@@ -31,11 +32,19 @@ public class GraphEditor extends JFrame {
         setLayout(new BorderLayout());
 
         canvas = new Canvas(new Drawing(), tools, options);
+        canvas.setChangeListener(this::updateState);
         add(canvas, BorderLayout.CENTER);
         add(createTopBar(), BorderLayout.NORTH);
+        add(status, BorderLayout.SOUTH);
 
+        updateState();
         pack();
         setLocationRelativeTo(null);
+    }
+
+    private void updateState() {
+        status.setText("Инструмент: " + tools.getCurrent().getLabel()
+                + "    |    Элементов: " + canvas.getDrawing().size());
     }
 
     private JPanel createTopBar() {
@@ -52,12 +61,13 @@ public class GraphEditor extends JFrame {
 
         ButtonGroup group = new ButtonGroup();
         addToolButton(panel, group, Tool.POINT, "Точка: щёлкайте или ведите мышь, удерживая кнопку");
-        addToolButton(panel, group, Tool.CIRCLE, "Круг: рисование кругами выбранного цвета");
-        addToolButton(panel, group, Tool.SQUARE, "Квадрат: рисование квадратами выбранного цвета");
+        addToolButton(panel, group, Tool.CIRCLE, "Круг: нажмите и протяните мышь, как в Paint");
+        addToolButton(panel, group, Tool.SQUARE, "Квадрат: нажмите и протяните мышь, как в Paint");
         addToolButton(panel, group, Tool.POLYGON,
                 "Полигон: щелчки задают вершины (минимум 3), двойной щелчок завершает");
-        addToolButton(panel, group, Tool.SELECT, "Выбор: щёлкните по фигуре, чтобы изменить её оформление");
-        addToolButton(panel, group, Tool.ERASER, "Ластик: щёлкните по фигуре, чтобы удалить её");
+        addToolButton(panel, group, Tool.SELECT,
+                "Выбор: щёлкните по фигуре; повторный щелчок и перетаскивание двигают её");
+        addToolButton(panel, group, Tool.ERASER, "Ластик: ведите мышью по фигурам, удерживая кнопку");
 
         panel.add(new JLabel("Цвет:"));
         ColorPalette penPalette = new ColorPalette(tools.getColor());
@@ -76,7 +86,10 @@ public class GraphEditor extends JFrame {
     private void addToolButton(JPanel panel, ButtonGroup group, Tool tool, String tooltip) {
         JToggleButton button = new JToggleButton(tool.getLabel());
         button.setToolTipText(tooltip);
-        button.addActionListener(e -> tools.setCurrent(tool));
+        button.addActionListener(e -> {
+            tools.setCurrent(tool);
+            updateState();
+        });
         group.add(button);
         panel.add(button);
         if (tool == tools.getCurrent()) {

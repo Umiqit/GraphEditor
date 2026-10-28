@@ -25,12 +25,22 @@ import java.util.List;
 
 public class Canvas extends JPanel {
 
+    private static final int MIN_DRAG = 6;
+
+    private static final int[][] HIT_OFFSETS = {
+            {0, 0}, {5, 0}, {-5, 0}, {0, 5}, {0, -5},
+            {4, 4}, {-4, 4}, {4, -4}, {-4, -4}
+    };
+
     private final Drawing drawing;
     private final ToolSelector tools;
     private final DecorationOptions options;
 
     private final List<int[]> draft = new ArrayList<>();
+    private int[] dragStart;
+    private int[] dragNow;
     private Shape selected;
+    private Runnable changeListener;
 
     public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options) {
         this.drawing = drawing;
@@ -51,10 +61,22 @@ public class Canvas extends JPanel {
         return selected;
     }
 
+    public void setChangeListener(Runnable listener) {
+        this.changeListener = listener;
+    }
+
+    private void notifyChanged() {
+        if (changeListener != null) {
+            changeListener.run();
+        }
+    }
+
     public void clearDrawing() {
         drawing.clear();
         draft.clear();
+        dragStart = null;
         selected = null;
+        notifyChanged();
         repaint();
     }
 
@@ -88,6 +110,7 @@ public class Canvas extends JPanel {
         drawing.remove(selected);
         drawing.add(redecorated);
         selected = redecorated;
+        notifyChanged();
         repaint();
     }
 
@@ -99,6 +122,7 @@ public class Canvas extends JPanel {
                 pts[i * 2 + 1] = draft.get(i)[1];
             }
             drawing.add(decorate(new Polygon(pts)));
+            notifyChanged();
         }
         draft.clear();
         repaint();
@@ -110,11 +134,40 @@ public class Canvas extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         try {
             drawing.drawAll(g2);
+            drawDragPreview(g2);
             drawDraft(g2);
             drawSelection(g2);
         } finally {
             g2.dispose();
         }
+    }
+
+    private void drawDragPreview(Graphics2D g) {
+        if (dragStart == null || dragNow == null) {
+            return;
+        }
+        Stroke old = g.getStroke();
+        g.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                10f, new float[]{4f, 4f}, 0f));
+        g.setColor(tools.getColor());
+        int[] box = dragBox();
+        if (tools.getCurrent() == Tool.CIRCLE) {
+            g.drawOval(box[0], box[1], box[2], box[3]);
+        } else if (tools.getCurrent() == Tool.SQUARE) {
+            g.drawRect(box[0], box[1], box[2], box[3]);
+        }
+        g.setStroke(old);
+    }
+
+    private int[] dragBox() {
+        int x = Math.min(dragStart[0], dragNow[0]);
+        int y = Math.min(dragStart[1], dragNow[1]);
+        int w = Math.abs(dragNow[0] - dragStart[0]);
+        int h = Math.abs(dragNow[1] - dragStart[1]);
+        if (tools.getCurrent() == Tool.CIRCLE || tools.getCurrent() == Tool.SQUARE) {
+            w = h = Math.max(w, h);
+        }
+        return new int[]{x, y, w, h};
     }
 
     private void drawDraft(Graphics2D g) {
@@ -147,10 +200,34 @@ public class Canvas extends JPanel {
         g.setColor(new Color(0, 120, 255));
         if (base instanceof Polygon p) {
             g.drawPolygon(p.xArray(), p.yArray(), p.getVertexCount());
+            for (int[] v : p.getVertices()) {
+                g.fillRect(v[0] - 3, v[1] - 3, 6, 6);
+            }
         } else if (selected instanceof Pixel pix) {
-            g.drawRect(pix.getX() - 12, pix.getY() - 12, 24, 24);
+            int half = Math.max(12, hitRadius(pix));
+            g.drawRect(pix.getX() - half, pix.getY() - half, half * 2, half * 2);
         }
         g.setStroke(old);
+    }
+
+    private int hitRadius(Pixel pix) {
+        if (pix instanceof ru.grapheditor.pixel.Circle c) {
+            return c.getRadius();
+        }
+        if (pix instanceof ru.grapheditor.pixel.Square s) {
+            return s.getSide() / 2;
+        }
+        return 6;
+    }
+
+    private Shape findTolerant(int x, int y) {
+        for (int[] off : HIT_OFFSETS) {
+            Shape hit = drawing.findAt(x + off[0], y + off[1]);
+            if (hit != null) {
+                return hit;
+            }
+        }
+        return null;
     }
 
     private class MouseHandler extends MouseAdapter {
@@ -160,13 +237,10 @@ public class Canvas extends JPanel {
             int x = e.getX();
             int y = e.getY();
             switch (tools.getCurrent()) {
-                case POINT, CIRCLE, SQUARE -> {
-                    PixelType type = switch (tools.getCurrent()) {
-                        case CIRCLE -> PixelType.CIRCLE;
-                        case SQUARE -> PixelType.SQUARE;
-                        default -> PixelType.POINT;
-                    };
-                    drawing.add(PixelFactory.create(type, x, y, tools.getColor()));
+                case POINT -> stamp(PixelType.POINT, x, y);
+                case CIRCLE, SQUARE -> {
+                    dragStart = new int[]{x, y};
+                    dragNow = new int[]{x, y};
                     repaint();
                 }
                 case POLYGON -> {
@@ -178,30 +252,88 @@ public class Canvas extends JPanel {
                     }
                 }
                 case SELECT -> {
-                    selected = drawing.findAt(x, y);
+                    Shape hit = findTolerant(x, y);
+                    if (hit == null) {
+                        selected = null;
+                    } else if (hit == selected) {
+                        dragStart = new int[]{x, y};
+                        dragNow = new int[]{x, y};
+                    } else {
+                        selected = hit;
+                    }
                     repaint();
                 }
-                case ERASER -> {
-                    Shape hit = drawing.findAt(x, y);
-                    if (hit != null) {
-                        if (hit == selected) {
-                            selected = null;
-                        }
-                        drawing.remove(hit);
-                        repaint();
-                    }
-                }
+                case ERASER -> eraseAt(x, y);
             }
         }
 
         @Override
         public void mouseDragged(MouseEvent e) {
-            if (tools.getCurrent() == Tool.POINT || tools.getCurrent() == Tool.CIRCLE
-                    || tools.getCurrent() == Tool.SQUARE) {
-                drawing.add(PixelFactory.create(
-                        tools.getCurrent() == Tool.CIRCLE ? PixelType.CIRCLE
-                                : tools.getCurrent() == Tool.SQUARE ? PixelType.SQUARE : PixelType.POINT,
-                        e.getX(), e.getY(), tools.getColor()));
+            switch (tools.getCurrent()) {
+                case POINT -> stamp(PixelType.POINT, e.getX(), e.getY());
+                case ERASER -> eraseAt(e.getX(), e.getY());
+                case CIRCLE, SQUARE -> {
+                    if (dragStart != null) {
+                        dragNow = new int[]{e.getX(), e.getY()};
+                        repaint();
+                    }
+                }
+                case SELECT -> {
+                    if (dragStart != null && selected != null) {
+                        selected.move(e.getX() - dragNow[0], e.getY() - dragNow[1]);
+                        dragNow = new int[]{e.getX(), e.getY()};
+                        repaint();
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            if (tools.getCurrent() == Tool.SELECT) {
+                dragStart = null;
+                dragNow = null;
+                return;
+            }
+            if (dragStart == null
+                    || (tools.getCurrent() != Tool.CIRCLE && tools.getCurrent() != Tool.SQUARE)) {
+                return;
+            }
+            dragNow = new int[]{e.getX(), e.getY()};
+            int[] box = dragBox();
+            if (box[2] < MIN_DRAG || box[3] < MIN_DRAG) {
+                stamp(tools.getCurrent() == Tool.CIRCLE ? PixelType.CIRCLE : PixelType.SQUARE,
+                        e.getX(), e.getY());
+            } else if (tools.getCurrent() == Tool.CIRCLE) {
+                drawing.add(new ru.grapheditor.pixel.Circle(
+                        box[0] + box[2] / 2, box[1] + box[3] / 2, box[2] / 2, tools.getColor()));
+                notifyChanged();
+            } else {
+                drawing.add(new ru.grapheditor.pixel.Square(
+                        box[0] + box[2] / 2, box[1] + box[3] / 2, box[2], tools.getColor()));
+                notifyChanged();
+            }
+            dragStart = null;
+            dragNow = null;
+            repaint();
+        }
+
+        private void stamp(PixelType type, int x, int y) {
+            drawing.add(PixelFactory.create(type, x, y, tools.getColor()));
+            notifyChanged();
+            repaint();
+        }
+
+        private void eraseAt(int x, int y) {
+            Shape hit = findTolerant(x, y);
+            if (hit != null) {
+                if (hit == selected) {
+                    selected = null;
+                }
+                drawing.remove(hit);
+                notifyChanged();
                 repaint();
             }
         }

@@ -73,6 +73,39 @@ public class Polygon implements Shape {
 
     @Override
     public boolean contains(int x, int y) {
-        return asAwtPolygon().contains(x, y);
+        java.awt.Polygon p = asAwtPolygon();
+        return p.contains(x, y) || distanceToEdge(p, x, y) <= 3.0;
+    }
+
+    @Override
+    public void move(int dx, int dy) {
+        for (int[] v : vertices) {
+            v[0] += dx;
+            v[1] += dy;
+        }
+    }
+
+    private static double distanceToEdge(java.awt.Polygon p, int px, int py) {
+        double best = Double.MAX_VALUE;
+        int n = p.npoints;
+        for (int i = 0; i < n; i++) {
+            int x1 = p.xpoints[i];
+            int y1 = p.ypoints[i];
+            int x2 = p.xpoints[(i + 1) % n];
+            int y2 = p.ypoints[(i + 1) % n];
+            best = Math.min(best, segmentDistance(px, py, x1, y1, x2, y2));
+        }
+        return best;
+    }
+
+    private static double segmentDistance(int px, int py, int x1, int y1, int x2, int y2) {
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double lenSq = dx * dx + dy * dy;
+        double t = lenSq == 0 ? 0
+                : Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+        double cx = x1 + t * dx;
+        double cy = y1 + t * dy;
+        return Math.hypot(px - cx, py - cy);
     }
 }

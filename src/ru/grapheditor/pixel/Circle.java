@@ -26,7 +26,10 @@ public class Circle extends Pixel {
     @Override
     public void draw(Graphics2D g) {
         g.setColor(color);
-        g.fillOval(x - radius, y - radius, radius * 2, radius * 2);
+        java.awt.Stroke old = g.getStroke();
+        g.setStroke(new java.awt.BasicStroke(2f));
+        g.drawOval(x - radius, y - radius, radius * 2, radius * 2);
+        g.setStroke(old);
     }
 
     @Override
