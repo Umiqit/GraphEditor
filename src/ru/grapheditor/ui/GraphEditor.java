@@ -3,6 +3,8 @@ package ru.grapheditor.ui;
 import ru.grapheditor.Settings;
 import ru.grapheditor.command.History;
 import ru.grapheditor.shape.Drawing;
+import ru.grapheditor.storage.DrawingStorage;
+import ru.grapheditor.storage.Storages;
 
 import javax.swing.Box;
 import javax.swing.BoxLayout;
@@ -21,6 +23,8 @@ import javax.swing.border.TitledBorder;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.io.File;
+import java.io.IOException;
 
 public class GraphEditor extends JFrame {
 
@@ -62,6 +66,18 @@ public class GraphEditor extends JFrame {
     private javax.swing.JMenuBar createMenuBar() {
         javax.swing.JMenuBar bar = new javax.swing.JMenuBar();
 
+        javax.swing.JMenu file = new javax.swing.JMenu("Файл");
+        javax.swing.JMenuItem newItem = new javax.swing.JMenuItem("Новый рисунок");
+        newItem.addActionListener(e -> canvas.newDrawing());
+        javax.swing.JMenuItem openItem = new javax.swing.JMenuItem("Открыть...");
+        openItem.addActionListener(e -> openDrawing());
+        javax.swing.JMenuItem saveItem = new javax.swing.JMenuItem("Сохранить...");
+        saveItem.addActionListener(e -> saveDrawing());
+        file.add(newItem);
+        file.add(openItem);
+        file.add(saveItem);
+        bar.add(file);
+
         javax.swing.JMenu settingsMenu = new javax.swing.JMenu("Настройки");
         javax.swing.JMenuItem backgroundItem = new javax.swing.JMenuItem("Фон и оформление по умолчанию...");
         backgroundItem.addActionListener(e -> showSettingsDialog());
@@ -78,6 +94,57 @@ public class GraphEditor extends JFrame {
         edit.add(deleteItem);
         bar.add(edit);
         return bar;
+    }
+
+    private void saveDrawing() {
+        javax.swing.JFileChooser chooser = new javax.swing.JFileChooser();
+        for (DrawingStorage s : Storages.ALL) {
+            chooser.addChoosableFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                    s.formatName(), s.extension()));
+        }
+        chooser.setAcceptAllFileFilterUsed(false);
+        if (chooser.showSaveDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        javax.swing.filechooser.FileNameExtensionFilter filter =
+                (javax.swing.filechooser.FileNameExtensionFilter) chooser.getFileFilter();
+        String ext = filter.getExtensions()[0];
+        File file = chooser.getSelectedFile();
+        if (!file.getName().toLowerCase().endsWith("." + ext)) {
+            file = new File(file.getParentFile(), file.getName() + "." + ext);
+        }
+        DrawingStorage storage = Storages.byExtension(ext);
+        try {
+            storage.save(canvas.getDrawing(), file);
+        } catch (IOException ex) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Не удалось сохранить файл:\n" + ex.getMessage(),
+                    "Ошибка сохранения", javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void openDrawing() {
+        javax.swing.JFileChooser chooser = new javax.swing.JFileChooser();
+        chooser.setAcceptAllFileFilterUsed(true);
+        if (chooser.showOpenDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        DrawingStorage storage = Storages.byExtension(Storages.extensionOf(file.getName()));
+        if (storage == null) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Формат файла не поддерживается: " + file.getName(),
+                    "Ошибка открытия", javax.swing.JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            Drawing loaded = storage.load(file);
+            canvas.setDrawingContent(loaded);
+        } catch (IOException ex) {
+            javax.swing.JOptionPane.showMessageDialog(this,
+                    "Не удалось открыть файл:\n" + ex.getMessage(),
+                    "Ошибка открытия", javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void showSettingsDialog() {
