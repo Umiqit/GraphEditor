@@ -1,5 +1,6 @@
 package ru.grapheditor.ui;
 
+import ru.grapheditor.Settings;
 import ru.grapheditor.command.History;
 import ru.grapheditor.shape.Drawing;
 
@@ -23,8 +24,9 @@ import java.awt.FlowLayout;
 
 public class GraphEditor extends JFrame {
 
+    private final Settings settings = new Settings();
     private final ToolSelector tools = new ToolSelector();
-    private final DecorationOptions options = new DecorationOptions();
+    private final DecorationOptions options = new DecorationOptions(settings);
     private final History history = new History();
     private final Canvas canvas;
     private final JLabel status = new JLabel("Инструмент: Точка");
@@ -36,7 +38,7 @@ public class GraphEditor extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
 
-        canvas = new Canvas(new Drawing(), tools, options, history);
+        canvas = new Canvas(new Drawing(), tools, options, settings, history);
         canvas.setChangeListener(this::updateState);
         add(canvas, BorderLayout.CENTER);
         add(createTopBar(), BorderLayout.NORTH);
@@ -59,6 +61,13 @@ public class GraphEditor extends JFrame {
 
     private javax.swing.JMenuBar createMenuBar() {
         javax.swing.JMenuBar bar = new javax.swing.JMenuBar();
+
+        javax.swing.JMenu settingsMenu = new javax.swing.JMenu("Настройки");
+        javax.swing.JMenuItem backgroundItem = new javax.swing.JMenuItem("Фон и оформление по умолчанию...");
+        backgroundItem.addActionListener(e -> showSettingsDialog());
+        settingsMenu.add(backgroundItem);
+        bar.add(settingsMenu);
+
         javax.swing.JMenu edit = new javax.swing.JMenu("Правка");
         undoItem.addActionListener(e -> canvas.undo());
         redoItem.addActionListener(e -> canvas.redo());
@@ -69,6 +78,61 @@ public class GraphEditor extends JFrame {
         edit.add(deleteItem);
         bar.add(edit);
         return bar;
+    }
+
+    private void showSettingsDialog() {
+        javax.swing.JDialog dialog = new javax.swing.JDialog(this, "Настройки", true);
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBorder(new javax.swing.border.EmptyBorder(10, 10, 10, 10));
+
+        JPanel bgRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        bgRow.add(new JLabel("Цвет фона:"));
+        ColorPalette bgPalette = new ColorPalette(settings.getBackgroundColor());
+        bgRow.add(bgPalette);
+        panel.add(bgRow);
+
+        JPanel widthRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        widthRow.add(new JLabel("Толщина контура по умолчанию:"));
+        JSpinner borderWidth = new JSpinner(new SpinnerNumberModel(
+                (double) settings.getDefaultBorderWidth(), 0.5, 20.0, 0.5));
+        borderWidth.setPreferredSize(new Dimension(60, 24));
+        widthRow.add(borderWidth);
+        panel.add(widthRow);
+
+        JPanel shadowRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        shadowRow.add(new JLabel("Смещение тени по умолчанию (X, Y):"));
+        JSpinner shadowX = new JSpinner(new SpinnerNumberModel(settings.getDefaultShadowOffsetX(), 0, 50, 1));
+        JSpinner shadowY = new JSpinner(new SpinnerNumberModel(settings.getDefaultShadowOffsetY(), 0, 50, 1));
+        shadowX.setPreferredSize(new Dimension(50, 24));
+        shadowY.setPreferredSize(new Dimension(50, 24));
+        shadowRow.add(shadowX);
+        shadowRow.add(shadowY);
+        panel.add(shadowRow);
+
+        JButton ok = new JButton("OK");
+        ok.addActionListener(e -> {
+            settings.setBackgroundColor(bgPalette.getSelected());
+            settings.setDefaultBorderWidth(((Number) borderWidth.getValue()).floatValue());
+            settings.setDefaultShadowOffsetX(((Number) shadowX.getValue()).intValue());
+            settings.setDefaultShadowOffsetY(((Number) shadowY.getValue()).intValue());
+            options.setBorderWidth(settings.getDefaultBorderWidth());
+            options.setShadowOffsetX(settings.getDefaultShadowOffsetX());
+            options.setShadowOffsetY(settings.getDefaultShadowOffsetY());
+            canvas.applySettings();
+            dialog.dispose();
+        });
+        JButton cancel = new JButton("Отмена");
+        cancel.addActionListener(e -> dialog.dispose());
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(ok);
+        buttons.add(cancel);
+        panel.add(buttons);
+
+        dialog.setContentPane(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     private void bindKeys() {

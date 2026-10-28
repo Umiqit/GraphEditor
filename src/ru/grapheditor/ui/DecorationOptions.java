@@ -1,5 +1,7 @@
 package ru.grapheditor.ui;
 
+import ru.grapheditor.Settings;
+
 import java.awt.Color;
 
 public class DecorationOptions {
@@ -15,6 +17,15 @@ public class DecorationOptions {
     private Color shadowColor = Color.DARK_GRAY;
     private int shadowOffsetX = 6;
     private int shadowOffsetY = 6;
+
+    public DecorationOptions() {
+    }
+
+    public DecorationOptions(Settings settings) {
+        borderWidth = settings.getDefaultBorderWidth();
+        shadowOffsetX = settings.getDefaultShadowOffsetX();
+        shadowOffsetY = settings.getDefaultShadowOffsetY();
+    }
 
     public boolean isFillEnabled() {
         return fillEnabled;

@@ -6,6 +6,7 @@ import ru.grapheditor.command.DeleteShapeCommand;
 import ru.grapheditor.command.History;
 import ru.grapheditor.command.MoveShapeCommand;
 import ru.grapheditor.command.RedecorateCommand;
+import ru.grapheditor.Settings;
 import ru.grapheditor.pixel.Pixel;
 import ru.grapheditor.pixel.PixelFactory;
 import ru.grapheditor.pixel.PixelType;
@@ -41,6 +42,7 @@ public class Canvas extends JPanel {
     private final Drawing drawing;
     private final ToolSelector tools;
     private final DecorationOptions options;
+    private final Settings settings;
     private final History history;
 
     private final List<int[]> draft = new ArrayList<>();
@@ -49,13 +51,15 @@ public class Canvas extends JPanel {
     private Shape selected;
     private Runnable changeListener;
 
-    public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options, History history) {
+    public Canvas(Drawing drawing, ToolSelector tools, DecorationOptions options,
+                  Settings settings, History history) {
         this.drawing = drawing;
         this.tools = tools;
         this.options = options;
+        this.settings = settings;
         this.history = history;
         setPreferredSize(new Dimension(800, 600));
-        setBackground(Color.WHITE);
+        applySettings();
         MouseHandler handler = new MouseHandler();
         addMouseListener(handler);
         addMouseMotionListener(handler);
@@ -81,6 +85,11 @@ public class Canvas extends JPanel {
         if (changeListener != null) {
             changeListener.run();
         }
+    }
+
+    public void applySettings() {
+        setBackground(settings.getBackgroundColor());
+        repaint();
     }
 
     public void newDrawing() {
