@@ -1,0 +1,71 @@
+@startuml
+title GraphEditor — диаграмма классов (инкремент 1)
+
+package ru.grapheditor.pixel {
+    abstract class Pixel {
+        #x: int
+        #y: int
+        #color: Color
+    }
+    class Point
+    class Circle {
+        -radius: int
+    }
+    class Square {
+        -side: int
+    }
+    enum PixelType {
+        POINT
+        CIRCLE
+        SQUARE
+    }
+    class PixelFactory {
+        +{static} create(type, x, y, color): Pixel
+    }
+
+    Pixel <|-- Point
+    Pixel <|-- Circle
+    Pixel <|-- Square
+    PixelFactory ..> Pixel
+    PixelFactory ..> PixelType
+}
+
+package ru.grapheditor.shape {
+    interface Shape {
+        +draw(g)
+        +contains(x, y)
+    }
+    class Drawing {
+        -shapes: List<Shape>
+        +add(shape)
+        +remove(shape)
+        +clear()
+        +findAt(x, y)
+        +drawAll(g)
+    }
+    Shape <|.. Pixel
+    Drawing o-- Shape
+}
+
+package ru.grapheditor.ui {
+    class Canvas {
+        -drawing: Drawing
+        +clearDrawing()
+    }
+    class ToolSelector {
+        -current: Tool
+        -color: Color
+    }
+    enum Tool {
+        POINT
+        CIRCLE
+        SQUARE
+    }
+
+    Canvas --> ToolSelector
+    Canvas --> Drawing
+    ToolSelector --> Tool
+}
+
+Canvas ..> PixelFactory : создаёт элементы
+@enduml
